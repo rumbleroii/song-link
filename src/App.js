@@ -57,7 +57,6 @@ const App = () => {
       console.log("Connected", accounts[0]);
       setNotif("Connected :D");
       setCurrentAccount(accounts[0]);
-      window.location.reload();
     } catch (error) {
       console.log(error);
     }
