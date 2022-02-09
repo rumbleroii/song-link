@@ -8,7 +8,7 @@ const App = () => {
   const [msg, setMsg] = useState("");
   const [notif, setNotif] = useState("");
   const [allWaves, setAllWaves] = useState();
-  const contractAddress = "0x1b73f29c3B77cADa0472613582A98ad6b850B98E";
+  const contractAddress = "0x1794E98C743be19d4a8928BD25340E90C49c1645";
   const contractABI = abi.abi;
 
   const checkIfWalletIsConnected = async () => {
@@ -62,8 +62,9 @@ const App = () => {
     }
   };
 
-  const wave = async (message) => {
+  const wave = async (playlist_url) => {
     try {
+      console.log(playlist_url);
       setNotif("Submitting....");
       const { ethereum } = window;
 
@@ -76,10 +77,10 @@ const App = () => {
           signer
         );
 
-        let count = await wavePortalContract.getTotalWaves();
+        let count = await wavePortalContract.getTotalPlaylist();
         console.log("Retrieved total wave count...", count.toNumber());
 
-        const waveTxn = await wavePortalContract.wave(message, {
+        const waveTxn = await wavePortalContract.upload(playlist_url, {
           gasLimit: 300000,
         });
         console.log("Mining...", waveTxn.hash);
@@ -88,7 +89,7 @@ const App = () => {
         await waveTxn.wait();
         console.log("Mined -- ", waveTxn.hash);
 
-        count = await wavePortalContract.getTotalWaves();
+        count = await wavePortalContract.getTotalPlaylist();
         console.log("Retrieved total wave count...", count.toNumber());
         setNotif(`Mined! Thanks for the Playlist (ɔ◔‿◔)ɔ ♥`);
       } else {
@@ -117,12 +118,13 @@ const App = () => {
         let wavesCleaned = [];
         waves.forEach((wave) => {
           wavesCleaned.push({
-            address: wave.waver,
+            address: wave.sender,
             timestamp: new Date(wave.timestamp * 1000),
-            message: wave.message,
+            url: wave.playlist_url,
           });
         });
 
+        
         setAllWaves(wavesCleaned);
       } else {
         console.log("Ethereum object doesn't exist!");
@@ -136,7 +138,7 @@ const App = () => {
     let wavePortalContract;
 
     const onNewWave = (from, timestamp, message) => {
-      console.log("NewWave", from, timestamp, message);
+      console.log("NewPlaylist", from, timestamp, message);
       setAllWaves((prevState) => [
         ...prevState,
         {
@@ -156,12 +158,12 @@ const App = () => {
         contractABI,
         signer
       );
-      wavePortalContract.on("NewWave", onNewWave);
+      wavePortalContract.on("NewPlaylist", onNewWave);
     }
 
     return () => {
       if (wavePortalContract) {
-        wavePortalContract.off("NewWave", onNewWave);
+        wavePortalContract.off("NewPlaylist", onNewWave);
       }
     };
   }, []);
@@ -173,35 +175,26 @@ const App = () => {
   }, []);
 
   const checkSpotifyURL = async(link) => {
-    try {
-      
-      const url = new URL(link.msg);
-
-      if (url.host === "open.spotify.com" && url.pathname.includes("playlist")) {
-        const path = url.pathname;
-        const str = `https://open.spotify.com/embed${path}`;
-
-        var request = new XMLHttpRequest();
-        request.open("GET", str, true);
-
-        request.onreadystatechange = function () {
-          if (request.readyState === 4) {
-            if (request.status >= 400) {
-              setNotif("Link cannot be reached, Try again :(");
-            } else {
-              wave(str);
-            }
-          }
-        };
-
-        request.send();
-      } else {
-        setNotif("Please enter a Spotify playlist share link only");
-      }
-    } catch (error){
-      console.log(error);
-    }
-  };
+    fetch("https://spotifyverifyapi.herokuapp.com/", {
+      method: "POST",
+      body: JSON.stringify({
+        url: link.msg,
+      }),
+      headers: {
+        "Content-type": "application/json; charset=UTF-8",
+      },
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.works == true) {
+          const url = new URL(link.msg);
+          const str = `https://open.spotify.com/embed${url.pathname}`;
+          wave(str);
+        } else {
+          setNotif(json.err);
+        }
+      });
+}
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -253,7 +246,7 @@ const App = () => {
           </form>
         )}
 
-        {allWaves?.reverse().map((wave, index) => {
+        { allWaves?.reverse().map((wave, index) => {
           const etherscan =
             "https://rinkeby.etherscan.io/address/" + wave.address;
           return (
@@ -266,11 +259,11 @@ const App = () => {
               }}
             >
               <iframe
-                src={wave.message}
+                src={wave.url}
                 width="100%"
                 height="380"
                 frameBorder="0"
-                allowfullscreen=""
+                allowFullScreen=""
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
               ></iframe>
               <div>Address: {wave.address}</div>
